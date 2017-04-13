@@ -47,7 +47,7 @@ struct step{
     }
 };
 
-int m = 20, n = 20; // map dimension
+int m = 20, n = 30; // map dimension
 int a[100][100];    // map
 int num_player;     // number of players
 int mine;           // id of this player
@@ -60,11 +60,20 @@ int last_move;      // last move of this player
 int point[10];      // point of each direction
 int dx[] = {0, 1, 0, -1};
 int dy[] = {1, 0, -1, 0};
+int cx[] = {-1, -1, 1, 1};
+int cy[] = {-1, 1, -1, 1};
 string ans_str[] = {"RIGHT", "DOWN", "LEFT", "UP"};
-/// UP 0
-/// RIGHT 1
-/// DOWN 2
-/// LEFT 3
+/// RIGHT 0
+/// DOWN 1
+/// LEFT 2
+/// UP 3
+
+const int PROTECT = 10000;
+const int KILL_ANOTHER = 8000;
+const int SAFE_MOVE = 5000;
+const int SCORE = 3000;
+const int GUESS_MOVE = 2000;
+const int NORMAL_MOVE = 1000; 
 
 int pair2int(II tmp){
     return tmp.fi * n + tmp.se;
@@ -100,15 +109,16 @@ int BFSEscape(int x, int y, int last_move){
     return c[x][y];
 }
 
-int BFSBack(int x, int y, int last_move){
+int BFSBack(int pi){
     memset(c, 0, sizeof(c));
-    memset(pre, -1, sizeof(pre));
-    memset(track, 0, sizeof(track));
     queue<step> q;
-    q.push(step(x, y, last_move));
-    c[x][y] = 1;
-    int ok = 0;
-    int total;
+    FO(i, 0, 4){
+        int u = p[pi].x + dx[i];
+        int v = p[pi].y + dy[i];
+        if(a[u][v] == 2*pi) continue;
+        q.push(step(u, v, -1));
+        c[u][v] = 1;
+    }
     while(!q.empty()){
         step s = q.front();
         q.pop();
@@ -118,34 +128,28 @@ int BFSBack(int x, int y, int last_move){
             int v = s.y + dy[i];
             if(u < 0 || m <= u || v < 0 || n <= v) continue;
             if(c[u][v] != 0) continue;
-            if(a[u][v] == 2*mine) continue;
+            if(a[u][v] == 2*pi) continue;
             if(a[u][v] == 2*mine-1){
                 c[u][v] = c[s.x][s.y] + 1;
-                total = c[u][v];
-                pre[pair2int(mp(u,v))] = pair2int(mp(s.x, s.y));
-                while(pre[pair2int(mp(u,v))] != -1){
-                    track[u][v] = c[u][v];
-                    int tmp = pre[pair2int(mp(u,v))];
-                    u = int2pair(tmp).fi;
-                    v = int2pair(tmp).se;
-                }
-                ok = 1;
-                break;
+                return c[u][v];
             }
             c[u][v] = c[s.x][s.y] + 1;
-            pre[pair2int(mp(u,v))] = pair2int(mp(s.x, s.y));
             q.push(step(u, v, i));
         }
-        if(ok) break;
     }
+    return 0;
+}
 
+int BFSAttack(){
+    int res = 1000000;
     FOR(pi, 1, num_player){
         if(pi == mine) continue;
         if(p[pi].x == -1 && p[pi].y == -1) continue;
         memset(atk, -1, sizeof(atk));
-        q = queue<step>();
+        queue<step> q;
         q.push(step(p[pi].x, p[pi].y, -1));
         atk[p[pi].x][p[pi].y] = 0;
+        int ok = 0;
         int atk_step;
         while(!q.empty()){
             step s = q.front();
@@ -158,18 +162,32 @@ int BFSBack(int x, int y, int last_move){
                 if(atk[u][v] != -1) continue;
                 if(a[u][v] == 2*pi-1) continue;
                 atk[u][v] = atk[s.x][s.y] + 1;
-                if(atk[u][v] >= total) continue;
-                if(a[u][v] == 2*mine-1 && atk[u][v] < total){
-                    return -1;
-                }
-                if(0 < track[u][v] && track[u][v] <= atk[u][v] && a[u][v] < total){
-                    return -1;
+                if(a[u][v] == 2*mine-1){
+                    atk_step = atk[u][v];
+                    ok = 1;
+                    break;
                 }
                 q.push(step(u, v, i));
             }
+            if(ok) break;
         }
+        res = min(res, atk_step);
     }
-    return total;
+    return res;
+}
+
+int checkNear(int x, int y){
+    FO(i, 0, 4){
+        int u = x+dx[i];
+        int v = y+dy[i];
+        if(0 <= u && u < m && 0 <= v && v < n && a[u][v] == 2*mine-1) return 2;
+    }
+    FO(i, 0, 4){
+        int u = x+cx[i];
+        int v = y+cy[i];
+        if(0 <= u && u < m && 0 <= v && v < n && a[u][v] == 2*mine) return 1;
+    }
+    return 0;
 }
 
 void process(){
@@ -189,13 +207,44 @@ void process(){
             point[i] = -1000000;
             continue;
         }
-        if(a[x][y] == 2*mine-1){
-            point[i] = BFSEscape(x, y, i);
-            continue;
+        if(a[ p[mine].x ][ p[mine].y ] == 2*mine-1){
+            if(a[x][y] == 2*mine-1){
+                point[i] = BFSEscape(x, y, i);
+            }
+            else if(a[x][y] != 0 && a[x][y] %2 == 0){
+                if(BFSBack(a[x][y]/2) > 1)
+                    point[i] = KILL_ANOTHER;
+                else
+                    point[i] = GUESS_MOVE;
+            }
+            else point[i] = NORMAL_MOVE;
         }
-        point[i] = BFSBack(x, y ,i)*1000;
+        else{
+            if(a[x][y] == 2*mine-1){
+                if(BFSAttack() <= 1)
+                    point[i] = PROTECT;
+                else
+                    point[i] = SCORE;
+            }
+            else if(a[x][y] != 0 && a[x][y] % 2 == 0){
+                if(BFSBack(a[x][y]/2) > 1)
+                    point[i] = KILL_ANOTHER;
+                else
+                    point[i] = GUESS_MOVE;
+            }
+            else{
+                int dis = checkNear(x, y);
+                if(dis == 2)
+                    point[i] = SAFE_MOVE;
+                else if(dis == 1)
+                    point[i] = GUESS_MOVE;
+                else 
+                    point[i] = NORMAL_MOVE;
+            }
+        }
+        //point[i] = BFSBack(x, y ,i)*1000;
     }
-    int maxPoint = -1;
+    int maxPoint = -10000000;
     int ans = 0;
     FO(i, 0, 4){
         //cout << ans_str[i] << " " << point[i] << endl;
@@ -217,6 +266,7 @@ int main(){
 
     cin >> num_player >> mine;
     last_move = -1;
+    //string tmp;
     while(true){
         FO(i, 0, m){
             string s;

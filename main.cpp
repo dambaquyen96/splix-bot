@@ -209,7 +209,7 @@ void process(){
         }
         if(a[ p[mine].x ][ p[mine].y ] == 2*mine-1){
             if(a[x][y] == 2*mine-1){
-                point[i] = BFSEscape(x, y, i);
+                point[i] = 1000-BFSEscape(x, y, i);
             }
             else if(a[x][y] != 0 && a[x][y] %2 == 0){
                 if(BFSBack(a[x][y]/2) > 1)
@@ -236,8 +236,12 @@ void process(){
                 int dis = checkNear(x, y);
                 if(dis == 2)
                     point[i] = SAFE_MOVE;
-                else if(dis == 1)
-                    point[i] = GUESS_MOVE;
+                else if(dis == 1){
+                    if(BFSBack(a[x][y]/2) > 2)
+                        point[i] = SAFE_MOVE;
+                    else
+                        point[i] = GUESS_MOVE;
+                }
                 else 
                     point[i] = NORMAL_MOVE;
             }
@@ -260,14 +264,14 @@ void process(){
 int main(){
     ios::sync_with_stdio(false);
     #ifndef ONLINE_JUDGE
-//    freopen("test.inp","r",stdin);
+    freopen("test.inp","r",stdin);
 //    freopen("test.out","w",stdout);
     #endif
 
     cin >> num_player >> mine;
-    last_move = -1;
-    //string tmp;
-    while(true){
+    last_move = 1;
+    string tmp;
+    while(cin >> tmp){
         FO(i, 0, m){
             string s;
             cin >> s;
